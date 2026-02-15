@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Staff Workload Distribution</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-block">W</div>
+      <div>
+        <div class="header-title">Workload Distribution System</div>
+        <div class="header-sub">INTELLIGENT TASK ASSIGNMENT · v2.0</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span><span class="status-dot"></span>SYSTEM ONLINE</span>
+      <span id="clock">00:00:00</span>
+      <button class="reset-btn" onclick="resetAll()">⟳ RESET</button>
+    </div>
+  </div>
+
+  <!-- ── Stat cards ──────────────────────────────────────────────────────── -->
+  <div class="stat-bar">
+    <div class="stat-card total">
+      <div class="stat-label">Total Staff</div>
+      <div class="stat-value total" id="stat-total">—</div>
+    </div>
+    <div class="stat-card avail">
+      <div class="stat-label">Available</div>
+      <div class="stat-value avail" id="stat-avail">—</div>
+    </div>
+    <div class="stat-card busy">
+      <div class="stat-label">Busy</div>
+      <div class="stat-value busy" id="stat-busy">—</div>
+    </div>
+    <div class="stat-card crit">
+      <div class="stat-label">Critical</div>
+      <div class="stat-value crit" id="stat-crit">—</div>
+    </div>
+  </div>
+
+  <!-- ── Main grid ───────────────────────────────────────────────────────── -->
+  <div class="grid-main">
+
+    <!-- Left: task form -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-label">▶ <span class="panel-label-accent">NEW TASK</span> ASSIGNMENT</span>
+        </div>
+        <div class="panel-body">
+
+          <div class="form-row">
+            <label class="form-label">Task Name</label>
+            <input id="taskName" class="form-input" type="text" placeholder="Describe the task…" />
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Required Skill</label>
+            <select id="skill" class="form-input"></select>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Priority Level</label>
+            <div class="priority-group">
+              <button class="priority-btn active-LOW"    onclick="setPriority('LOW')"   >LOW</button>
+              <button class="priority-btn active-MEDIUM" onclick="setPriority('MEDIUM')">MEDIUM</button>
+              <button class="priority-btn"               onclick="setPriority('HIGH')"  >HIGH</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Estimated Hours</label>
+            <div class="hours-row">
+              <input id="hoursNum" class="form-input hours-input" type="number" min="1" max="40" value="8"
+                     oninput="syncSlider(this.value)" />
+              <input id="hoursRange" class="hours-slider" type="range" min="1" max="40" value="8"
+                     oninput="syncNum(this.value)" />
+            </div>
+          </div>
+
+          <button class="submit-btn" onclick="submitTask()">▶ ASSIGN TASK</button>
+
+          <div id="flash" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: assignment log -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-label">▶ <span class="panel-label-accent">ASSIGNMENT</span> LOG</span>
+        <span class="panel-label" id="log-count">0 ENTRIES</span>
+      </div>
+      <div class="log-scroll" id="log-list">
+        <div class="empty-log">NO ASSIGNMENTS YET · SUBMIT A TASK TO BEGIN</div>
+      </div>
+    </div>
+
+  </div><!-- /grid-main -->
+
+  <!-- ── Staff table ─────────────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-label">▶ <span class="panel-label-accent">STAFF</span> OVERVIEW</span>
+      <span class="panel-label" id="staff-count">— PERSONNEL</span>
+    </div>
+    <div class="table-wrap">
+      <table class="staff-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Expertise</th>
+            <th>Reliability</th>
+            <th>Workload</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="staff-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+/* ── State ─────────────────────────────────────────────────────────────────── */
+let currentPriority = "MEDIUM";
+
+/* ── Clock ─────────────────────────────────────────────────────────────────── */
+function tickClock() {
+  document.getElementById("clock").textContent =
+    new Date().toLocaleTimeString("en-US", { hour12: false });
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+/* ── Priority toggle ────────────────────────────────────────────────────────── */
+function setPriority(p) {
+  currentPriority = p;
+  document.querySelectorAll(".priority-btn").forEach(btn => {
+    btn.className = "priority-btn";
+    if (btn.textContent.trim() === p) btn.classList.add("active-" + p);
+  });
+}
+
+/* ── Hours sync ─────────────────────────────────────────────────────────────── */
+function syncSlider(v) { document.getElementById("hoursRange").value = v; }
+function syncNum(v)    { document.getElementById("hoursNum").value   = v; }
+
+/* ── Flash message ──────────────────────────────────────────────────────────── */
+function showFlash(type, msg) {
+  const el = document.getElementById("flash");
+  el.className    = type === "success" ? "flash-success" : "flash-error";
+  el.textContent  = (type === "success" ? "✓ " : "✗ ") + msg;
+  el.style.display = "block";
+}
+
+/* ── Render helpers ─────────────────────────────────────────────────────────── */
+function renderStats(stats) {
+  document.getElementById("stat-total").textContent = stats.total;
+  document.getElementById("stat-avail").textContent = stats.available;
+  document.getElementById("stat-busy").textContent  = stats.busy;
+  document.getElementById("stat-crit").textContent  = stats.critical;
+}
+
+function renderLog(log) {
+  document.getElementById("log-count").textContent = log.length + " ENTRIES";
+  const list = document.getElementById("log-list");
+
+  if (!log.length) {
+    list.innerHTML = '<div class="empty-log">NO ASSIGNMENTS YET · SUBMIT A TASK TO BEGIN</div>';
+    return;
+  }
+
+  list.innerHTML = log.map(e => {
+    const pColor = e.priority === "HIGH" ? "#FF3B30" : e.priority === "MEDIUM" ? "#FF9F0A" : "#30D158";
+    const scoreHtml = e.success
+      ? `<div style="font-size:16px;font-weight:700;color:#E8EDF8">${e.score}</div>
+         <div style="font-size:9px;color:#5A6480;letter-spacing:0.1em">SCORE</div>`
+      : "";
+    const metaHtml = e.success
+      ? `<span style="color:#30D158">✓ </span>
+         <span style="color:#C8D0E0">${e.assignee}</span>
+         <span style="color:#5A6480"> · ${e.reasons}</span><br>
+         <span style="color:#5A6480">${e.ts} · ${e.hours}h · </span>
+         <span style="color:${e.skillColor}">${e.skillCode}</span>
+         <span style="color:#5A6480"> · ${e.eligible} eligible</span>`
+      : `<span style="color:#FF3B30">✗ FAILED · </span>
+         <span style="color:#5A6480">${e.message}</span><br>
+         <span style="color:#5A6480">${e.ts}</span>`;
+
+    return `
+      <div class="log-entry">
+        <div>
+          <div class="log-task">${e.taskName}</div>
+          <div class="log-meta">${metaHtml}</div>
+        </div>
+        <div class="log-score">
+          ${scoreHtml}
+          <span class="log-badge" style="color:${pColor};border-color:${pColor};background:${pColor}18">
+            ${e.priority}
+          </span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderStaff(employees) {
+  document.getElementById("staff-count").textContent = employees.length + " PERSONNEL";
+  document.getElementById("staff-body").innerHTML = employees.map(emp => {
+    const loadColor = emp.currentHours >= 30 ? "#FF3B30" : emp.currentHours >= 20 ? "#FF9F0A" : "#30D158";
+    const relDots = Array.from({length: 10}, (_, i) => {
+      const relColor = emp.reliability >= 9 ? "#30D158" : emp.reliability >= 7 ? "#FF9F0A" : "#FF3B30";
+      const bg = i < emp.reliability ? relColor : "#2A3650";
+      return `<div class="rel-dot" style="background:${bg}"></div>`;
+    }).join("");
+
+    return `
+      <tr>
+        <td>
+          <span class="avatar"
+            style="background:${emp.skillColor}22;color:${emp.skillColor};border:1px solid ${emp.skillColor}44">
+            ${emp.initials}
+          </span>
+          <span style="color:#E8EDF8">${emp.name}</span>
+        </td>
+        <td>
+          <span class="skill-tag"
+            style="color:${emp.skillColor};border-color:${emp.skillColor}55;background:${emp.skillColor}12">
+            ${emp.skillCode}
+          </span>
+          <span style="color:#5A6480;font-size:10px;margin-left:6px">${emp.expertise}</span>
+        </td>
+        <td>
+          <div class="rel-dots">
+            ${relDots}
+            <span style="margin-left:6px;font-size:10px;color:#C8D0E0">${emp.reliability}/10</span>
+          </div>
+        </td>
+        <td>
+          <div class="load-bar-wrap">
+            <div class="load-bar">
+              <div class="load-bar-fill" style="width:${emp.loadPct}%;background:${loadColor}"></div>
+            </div>
+            <span class="load-val">${emp.currentHours}h</span>
+          </div>
+        </td>
+        <td>
+          <span class="status-chip"
+            style="color:${emp.statusColor};border-color:${emp.statusColor}55;background:${emp.statusBg}">
+            <span class="status-pip"
+              style="background:${emp.statusColor};box-shadow:0 0 4px ${emp.statusColor}"></span>
+            ${emp.status}
+          </span>
+        </td>
+      </tr>`;
+  }).join("");
+}
+
+function renderAll(data) {
+  renderStats(data.stats);
+  renderLog(data.log);
+  renderStaff(data.employees);
+}
+
+/* ── Skill dropdown ─────────────────────────────────────────────────────────── */
+function populateSkills(skills) {
+  const sel = document.getElementById("skill");
+  sel.innerHTML = skills.map(s => `<option value="${s}">${s}</option>`).join("");
+}
+
+/* ── API calls ──────────────────────────────────────────────────────────────── */
+async function loadState() {
+  const res  = await fetch("/api/state");
+  const data = await res.json();
+  populateSkills(data.skills);
+  renderAll(data);
+}
+
+async function submitTask() {
+  const taskName = document.getElementById("taskName").value.trim();
+  if (!taskName) { showFlash("error", "Please enter a task name."); return; }
+
+  const payload = {
+    taskName,
+    skill:    document.getElementById("skill").value,
+    priority: currentPriority,
+    hours:    parseInt(document.getElementById("hoursNum").value, 10),
+  };
+
+  const res  = await fetch("/api/assign", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(payload),
+  });
+  const data = await res.json();
+  renderAll(data);
+
+  if (data.lastResult.success) {
+    const r = data.lastResult;
+    showFlash("success",
+      `Assigned → ${r.employee.name}  ·  Score: ${r.score}  ·  ${r.reasons}`);
+    document.getElementById("taskName").value = "";
+  } else {
+    showFlash("error", data.lastResult.message);
+  }
+}
+
+async function resetAll() {
+  const res  = await fetch("/api/reset", { method: "POST" });
+  const data = await res.json();
+  renderAll(data);
+  document.getElementById("flash").style.display = "none";
+}
+
+/* ── Boot ───────────────────────────────────────────────────────────────────── */
+loadState();
+</script>
+</body>
+</html>
